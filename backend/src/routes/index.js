@@ -1,0 +1,41 @@
+import { Router } from 'express';
+import authRoutes from './auth.routes.js';
+import bankRoutes from './bank.routes.js';
+import accountRoutes from './account.routes.js';
+import { testDbConnection } from '../config/db.js';
+import { ApiResponse } from '../utils/apiResponse.js';
+
+const router = Router();
+
+// Health check endpoint
+router.get('/health', async (req, res) => {
+  const dbHealth = await testDbConnection();
+
+  const healthData = {
+    status: dbHealth.connected ? 'healthy' : 'degraded',
+    service: 'VaultPay Banking API',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    database: {
+      type: 'MySQL 8',
+      connected: dbHealth.connected,
+      ...(dbHealth.error && { error: dbHealth.error, code: dbHealth.code }),
+    },
+  };
+
+  const statusCode = dbHealth.connected ? 200 : 503;
+  return res.status(statusCode).json({
+    success: dbHealth.connected,
+    message: dbHealth.connected
+      ? 'VaultPay Core API is operating normally'
+      : 'VaultPay API is running, but database connection is unavailable',
+    data: healthData,
+  });
+});
+
+// Mount domain routes
+router.use('/auth', authRoutes);
+router.use('/banks', bankRoutes);
+router.use('/accounts', accountRoutes);
+
+export default router;
