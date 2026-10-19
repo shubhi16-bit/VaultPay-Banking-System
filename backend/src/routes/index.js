@@ -2,6 +2,9 @@ import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import bankRoutes from './bank.routes.js';
 import accountRoutes from './account.routes.js';
+import transferRoutes from './transfer.routes.js';
+import userRoutes from './user.routes.js';
+import transactionRoutes from './transaction.routes.js';
 import { testDbConnection } from '../config/db.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -37,5 +40,8 @@ router.get('/health', async (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/banks', bankRoutes);
 router.use('/accounts', accountRoutes);
+router.use('/transfers', transferRoutes);
+router.use('/users', userRoutes);
+router.use('/transactions', transactionRoutes);
 
 export default router;

@@ -340,15 +340,361 @@
 
 ---
 
-## 5. Upcoming Phase Endpoints (Preview)
-- `POST /api/payments/deposit` (Phase 2)
-- `GET /api/payments/search-recipient?q=...` (Phase 2)
-- `POST /api/payments/transfer` (Phase 2)
-- `GET /api/transactions` (Phase 2)
-- `GET /api/transactions/:referenceId` (Phase 2)
+## 5. Simulated Money (Demo Deposits)
+
+### 5.1 Add Demo Money
+- **Method**: `POST`
+- **Endpoint**: `/api/accounts/deposit`
+- **Auth**: `Bearer <TOKEN>`
+- **Request Body**:
+```json
+{
+  "amount": 5000.00,
+  "note": "Simulated salary deposit"
+}
+```
+- **Validation Rules**:
+  - `amount`: Required positive number between ₹1.00 and ₹50,000.00 per deposit.
+  - `note`: Optional string, max 100 characters (default: `"Simulated demo deposit"`).
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Simulated demo deposit successful",
+  "data": {
+    "transactionId": 14,
+    "referenceId": "TXN_DEP_1729350600000_a1b2c3d4",
+    "type": "deposit",
+    "amount": 5000.00,
+    "currency": "INR",
+    "previousBalance": 25000.00,
+    "newBalance": 30000.00,
+    "status": "completed",
+    "isSimulated": true,
+    "note": "Simulated salary deposit",
+    "account": {
+      "accountId": 1,
+      "accountNumber": "100100234567",
+      "bankName": "Apex National Bank",
+      "vaultpayId": "rahul@vaultpay"
+    },
+    "timestamp": "2026-10-19T12:30:00.000Z"
+  }
+}
+```
+- **Sample Error Response (422 Unprocessable Entity - Exceeded Limit)**:
+```json
+{
+  "success": false,
+  "message": "Validation error",
+  "errors": [
+    { "field": "amount", "message": "Maximum simulated deposit per transaction is ₹50,000.00" }
+  ]
+}
+```
+
+---
+
+## 6. Recipient Search & Recent Payees
+
+### 6.1 Search Recipient by VaultPay ID, Name, Phone
+- **Method**: `GET`
+- **Endpoint**: `/api/users/search?q={query}`
+- **Auth**: `Bearer <TOKEN>`
+- **Query Parameters**:
+  - `q`: Search string (e.g. `priya`, `priya@vaultpay`, or `9876543211`). Required, min 1 char.
+- **Privacy Guarantee**: Returns only safe public directory data. Never returns passwords, balances, or full account numbers. Excludes the authenticated sender from results.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Recipients retrieved successfully",
+  "data": [
+    {
+      "userId": 3,
+      "fullName": "Priya Verma",
+      "vaultpayId": "priya@vaultpay",
+      "bankName": "Zenith Commerce Bank",
+      "bankCode": "ZENITH",
+      "bankLogo": "https://images.unsplash.com/photo-1501167786227-4cba60f6d58f?w=128&q=80"
+    }
+  ]
+}
+```
+
+### 6.2 Get Recent Payees (Homepage Quick Contacts)
+- **Method**: `GET`
+- **Endpoint**: `/api/users/recent-payees?limit=8`
+- **Auth**: `Bearer <TOKEN>`
+- **Query Parameters**:
+  - `limit`: Optional integer between 1 and 20 (default: 8).
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Recent payees retrieved successfully",
+  "data": [
+    {
+      "beneficiaryId": 1,
+      "userId": 3,
+      "fullName": "Priya Verma",
+      "vaultpayId": "priya@vaultpay",
+      "bankName": "Zenith Commerce Bank",
+      "bankCode": "ZENITH",
+      "bankLogo": "https://images.unsplash.com/photo-1501167786227-4cba60f6d58f?w=128&q=80",
+      "lastTransactedAt": "2026-10-19T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## 7. Send Money (Transfers)
+
+### 7.1 Execute Peer-to-Peer Transfer
+- **Method**: `POST`
+- **Endpoint**: `/api/transfers`
+- **Auth**: `Bearer <TOKEN>`
+- **Headers**:
+  - `Idempotency-Key`: *(Recommended)* Unique UUID string to guarantee safe retries.
+- **Request Body**:
+```json
+{
+  "recipientVaultpayId": "priya@vaultpay",
+  "amount": 1500.00,
+  "note": "Lunch bill split",
+  "idempotencyKey": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+}
+```
+- **Validation Rules**:
+  - `recipientVaultpayId`: Required string ending with `@vaultpay`.
+  - `amount`: Required positive number between ₹1.00 and ₹100,000.00.
+  - `note`: Optional string, max 150 characters.
+  - `idempotencyKey`: Optional string, max 128 characters.
+- **Backend Mechanics**:
+  - Sender identity is derived exclusively from JWT (never accepted from body).
+  - MySQL begins transaction and applies ordered pessimistic row locks (`SELECT ... FOR UPDATE`).
+  - Balances update atomically alongside balanced double-entry ledger records.
+  - Beneficiary list updates automatically.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Money transferred successfully",
+  "data": {
+    "transactionId": 15,
+    "referenceId": "TXN_20261019123045_7f8a9b0c",
+    "amount": 1500.00,
+    "currency": "INR",
+    "senderBalanceAfter": 23500.00,
+    "status": "completed",
+    "note": "Lunch bill split",
+    "recipient": {
+      "fullName": "Priya Verma",
+      "vaultpayId": "priya@vaultpay",
+      "bankName": "Zenith Commerce Bank"
+    },
+    "timestamp": "2026-10-19T12:30:45.000Z"
+  }
+}
+```
+- **Sample Error Responses**:
+  - **400 Bad Request — Insufficient Funds**:
+    ```json
+    {
+      "success": false,
+      "message": "Insufficient balance for transfer."
+    }
+    ```
+  - **400 Bad Request — Self-Transfer**:
+    ```json
+    {
+      "success": false,
+      "message": "Self-transfers to your own account are not permitted."
+    }
+    ```
+  - **400 Bad Request — Frozen Account**:
+    ```json
+    {
+      "success": false,
+      "message": "Sender bank account is frozen or inactive. Transfers are restricted."
+    }
+    ```
+
+---
+
+## 8. Transaction History & Digital Receipts
+
+### 8.1 List User Transactions (Paginated & Filterable)
+- **Method**: `GET`
+- **Endpoint**: `/api/transactions`
+- **Auth**: `Bearer <TOKEN>`
+- **Query Parameters**:
+  - `page`: Page number (default: 1)
+  - `limit`: Items per page (default: 10, max: 50)
+  - `type`: `'all'` | `'transfer'` | `'deposit'` | `'withdrawal'` (default: `'all'`)
+  - `flow`: `'all'` | `'sent'` | `'received'` (default: `'all'`)
+  - `status`: `'all'` | `'completed'` | `'pending'` | `'failed'` (default: `'all'`)
+  - `startDate`: Optional date `YYYY-MM-DD`
+  - `endDate`: Optional date `YYYY-MM-DD`
+  - `search`: Search text (matches reference ID, note, or counterparty)
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Transactions retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "transactionId": 15,
+        "referenceId": "TXN_20261019123045_7f8a9b0c",
+        "type": "transfer",
+        "flow": "debit",
+        "amount": 1500.00,
+        "fee": 0.00,
+        "currency": "INR",
+        "status": "completed",
+        "note": "Lunch bill split",
+        "counterparty": {
+          "fullName": "Priya Verma",
+          "vaultpayId": "priya@vaultpay",
+          "bankName": "Zenith Commerce Bank"
+        },
+        "createdAt": "2026-10-19 12:30:45",
+        "completedAt": "2026-10-19 12:30:45"
+      },
+      {
+        "transactionId": 14,
+        "referenceId": "TXN_DEP_1729350600000_a1b2c3d4",
+        "type": "deposit",
+        "flow": "credit",
+        "amount": 5000.00,
+        "fee": 0.00,
+        "currency": "INR",
+        "status": "completed",
+        "note": "Simulated salary deposit",
+        "counterparty": {
+          "fullName": "VaultPay Simulated Treasury",
+          "vaultpayId": "treasury@vaultpay",
+          "bankName": "Simulated Central Reserve"
+        },
+        "createdAt": "2026-10-19 12:00:00",
+        "completedAt": "2026-10-19 12:00:00"
+      }
+    ],
+    "pagination": {
+      "total": 24,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 3
+    }
+  }
+}
+```
+
+### 8.2 Get Transaction Details & Receipt
+- **Method**: `GET`
+- **Endpoint**: `/api/transactions/:id` *(Accepts numeric transaction ID or reference string like `TXN_...`)*
+- **Auth**: `Bearer <TOKEN>`
+- **Security Check**: Returns 403 Forbidden if the authenticated user is neither the sender nor the recipient.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Transaction details retrieved successfully",
+  "data": {
+    "transactionId": 15,
+    "referenceId": "TXN_20261019123045_7f8a9b0c",
+    "type": "transfer",
+    "flow": "debit",
+    "amount": 1500.00,
+    "fee": 0.00,
+    "currency": "INR",
+    "status": "completed",
+    "note": "Lunch bill split",
+    "failureReason": null,
+    "createdAt": "2026-10-19 12:30:45",
+    "completedAt": "2026-10-19 12:30:45",
+    "sender": {
+      "fullName": "Rahul Sharma",
+      "vaultpayId": "rahul@vaultpay",
+      "bankName": "Apex National Bank",
+      "maskedAccountNumber": "••••4567"
+    },
+    "recipient": {
+      "fullName": "Priya Verma",
+      "vaultpayId": "priya@vaultpay",
+      "bankName": "Zenith Commerce Bank",
+      "maskedAccountNumber": "••••6543"
+    },
+    "ledgerEntries": [
+      {
+        "entryId": 22,
+        "entryType": "debit",
+        "amount": 1500.00,
+        "balanceAfter": 23500.00,
+        "description": "Debit for transfer to priya@vaultpay (ref: TXN_20261019123045_7f8a9b0c)",
+        "timestamp": "2026-10-19 12:30:45"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 9. Sample Frontend Payment Workflow
+
+Here is how the React frontend can implement the Google Pay-style transfer flow:
+
+```typescript
+// 1. User searches for a payee in the search bar
+const searchResponse = await fetch('/api/users/search?q=priya', {
+  headers: { Authorization: `Bearer ${token}` }
+});
+const { data: recipients } = await searchResponse.json();
+
+// 2. User selects recipient and enters amount
+const selectedRecipient = recipients[0]; // { vaultpayId: 'priya@vaultpay', ... }
+
+// 3. Generate client-side idempotency key (UUID) to prevent double charge on lag
+const idempotencyKey = crypto.randomUUID();
+
+// 4. Send payment
+const paymentResponse = await fetch('/api/transfers', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+    'Idempotency-Key': idempotencyKey,
+  },
+  body: JSON.stringify({
+    recipientVaultpayId: selectedRecipient.vaultpayId,
+    amount: 1500.00,
+    note: 'Dinner split',
+    idempotencyKey,
+  }),
+});
+
+const result = await paymentResponse.json();
+if (result.success) {
+  // Update local balance state immediately with result.data.senderBalanceAfter
+  // Display animated Success checkmark and Receipt modal
+  console.log('Payment successful! Ref:', result.data.referenceId);
+} else {
+  // Display toast error: result.message
+}
+```
+
+---
+
+## 10. Upcoming Phase Endpoints (Preview)
 - `GET /api/qr/my-code` (Phase 3)
 - `POST /api/qr/resolve` (Phase 3)
 - `GET /api/dashboard/summary` (Phase 3)
+- `GET /api/dashboard/analytics` (Phase 3)
 - `GET /api/admin/users` (Phase 4)
 - `PATCH /api/admin/accounts/:id/status` (Phase 4)
 - `GET /api/admin/audit-logs` (Phase 4)
+

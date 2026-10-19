@@ -5,12 +5,17 @@ let pool;
 
 export function getDbPool() {
   if (!pool) {
+    const dbName =
+      process.env.NODE_ENV === 'test'
+        ? process.env.TEST_DB_NAME || 'vaultpay_test_db'
+        : env.DB_NAME;
+
     pool = mysql.createPool({
       host: env.DB_HOST,
       port: env.DB_PORT,
       user: env.DB_USER,
       password: env.DB_PASSWORD,
-      database: env.DB_NAME,
+      database: dbName,
       waitForConnections: true,
       connectionLimit: env.DB_CONNECTION_LIMIT,
       queueLimit: 0,

@@ -90,8 +90,16 @@ SELECT
     t.amount AS transaction_amount,
     SUM(CASE WHEN le.entry_type = 'debit' THEN le.amount ELSE 0 END) AS total_debit,
     SUM(CASE WHEN le.entry_type = 'credit' THEN le.amount ELSE 0 END) AS total_credit,
-    (SUM(CASE WHEN le.entry_type = 'credit' THEN le.amount ELSE 0 END) - 
-     SUM(CASE WHEN le.entry_type = 'debit' THEN le.amount ELSE 0 END)) AS net_discrepancy,
+    CASE 
+        WHEN t.type = 'transfer' THEN 
+            (SUM(CASE WHEN le.entry_type = 'credit' THEN le.amount ELSE 0 END) - 
+             SUM(CASE WHEN le.entry_type = 'debit' THEN le.amount ELSE 0 END))
+        WHEN t.type = 'deposit' THEN 
+            (SUM(CASE WHEN le.entry_type = 'credit' THEN le.amount ELSE 0 END) - t.amount)
+        WHEN t.type = 'withdrawal' THEN 
+            (SUM(CASE WHEN le.entry_type = 'debit' THEN le.amount ELSE 0 END) - t.amount)
+        ELSE 0.00
+    END AS net_discrepancy,
     t.status AS transaction_status,
     t.created_at
 FROM ledger_entries le

@@ -164,6 +164,12 @@ proc_label: BEGIN
         RESIGNAL;
     END;
 
+    -- Sanitize input parameters
+    SET p_recipient_vaultpay_id = LOWER(TRIM(p_recipient_vaultpay_id));
+    IF p_idempotency_key IS NOT NULL AND TRIM(p_idempotency_key) = '' THEN
+        SET p_idempotency_key = NULL;
+    END IF;
+
     -- Validate Amount
     IF p_amount <= 0.00 THEN
         SIGNAL SQLSTATE '45000'
@@ -172,17 +178,24 @@ proc_label: BEGIN
 
     START TRANSACTION;
 
-    -- 1. Check Idempotency Key
+    -- 1. Check Idempotency Key (Return existing completed transaction without re-execution)
     IF p_idempotency_key IS NOT NULL THEN
         SELECT id, reference_id INTO p_transaction_id, p_reference_id
-        FROM transactions WHERE idempotency_key = p_idempotency_key LIMIT 1;
+        FROM transactions 
+        WHERE idempotency_key = p_idempotency_key AND sender_user_id = p_sender_user_id
+        LIMIT 1;
         
         IF p_transaction_id IS NOT NULL THEN
-            -- Already executed successfully, return existing result
-            SELECT balance INTO p_sender_balance_after
-            FROM bank_accounts ba
-            JOIN transactions t ON t.sender_account_id = ba.id
-            WHERE t.id = p_transaction_id;
+            SELECT balance_after INTO p_sender_balance_after
+            FROM ledger_entries
+            WHERE transaction_id = p_transaction_id AND entry_type = 'debit'
+            LIMIT 1;
+
+            IF p_sender_balance_after IS NULL THEN
+                SELECT balance INTO p_sender_balance_after
+                FROM bank_accounts
+                WHERE user_id = p_sender_user_id AND is_primary = TRUE;
+            END IF;
             
             COMMIT;
             LEAVE proc_label;
@@ -192,7 +205,8 @@ proc_label: BEGIN
     -- 2. Resolve Sender Account
     SELECT id, balance, status INTO v_sender_account_id, v_sender_balance, v_sender_status
     FROM bank_accounts
-    WHERE user_id = p_sender_user_id AND is_primary = TRUE;
+    WHERE user_id = p_sender_user_id AND is_primary = TRUE
+    LIMIT 1;
 
     IF v_sender_account_id IS NULL THEN
         SIGNAL SQLSTATE '45000'
@@ -209,7 +223,8 @@ proc_label: BEGIN
     INTO v_recipient_user_id, v_recipient_account_id, v_recipient_balance, v_recipient_status
     FROM payment_profiles pp
     JOIN bank_accounts ba ON pp.primary_account_id = ba.id
-    WHERE pp.vaultpay_id = p_recipient_vaultpay_id AND pp.status = 'active';
+    WHERE pp.vaultpay_id = p_recipient_vaultpay_id AND pp.status = 'active'
+    LIMIT 1;
 
     IF v_recipient_user_id IS NULL THEN
         SIGNAL SQLSTATE '45000'
@@ -250,7 +265,7 @@ proc_label: BEGIN
     END IF;
 
     -- 6. Generate Unique Reference ID
-    SET p_reference_id = CONCAT('TXN_', DATE_FORMAT(NOW(), '%Y%m%d%H%i%s'), '_', SUBSTRING(MD5(RAND()), 1, 8));
+    SET p_reference_id = CONCAT('TXN_', DATE_FORMAT(NOW(), '%Y%m%d%H%i%s'), '_', SUBSTRING(MD5(CONCAT(RAND(), UUID())), 1, 8));
 
     -- 7. Execute Balance Updates
     UPDATE bank_accounts
@@ -296,7 +311,7 @@ proc_label: BEGIN
     -- 10. Update Recent Payees / Beneficiaries
     INSERT INTO beneficiaries (user_id, payee_user_id, payee_vaultpay_id, last_transacted_at)
     VALUES (p_sender_user_id, v_recipient_user_id, p_recipient_vaultpay_id, NOW())
-    ON DUPLICATE KEY UPDATE last_transacted_at = NOW();
+    ON DUPLICATE KEY UPDATE last_transacted_at = NOW(), payee_vaultpay_id = p_recipient_vaultpay_id;
 
     -- 11. Record Audit Log
     INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, user_agent, metadata)
