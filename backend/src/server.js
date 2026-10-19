@@ -22,6 +22,17 @@ async function startServer() {
     logger.info(`Health check available at http://localhost:${env.PORT}/api/health`);
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${env.PORT} is already in use by another process.`);
+      logger.error(`To release port ${env.PORT} on Windows, run:`);
+      logger.error(`Get-NetTCPConnection -LocalPort ${env.PORT} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`);
+    } else {
+      logger.error('Server error encountered:', err);
+    }
+    process.exit(1);
+  });
+
   // Graceful shutdown handling
   const shutdown = async (signal) => {
     logger.info(`Received ${signal}. Gracefully shutting down VaultPay server...`);
