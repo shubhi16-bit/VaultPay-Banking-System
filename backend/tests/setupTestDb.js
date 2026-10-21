@@ -40,6 +40,7 @@ export async function setupTestDatabase() {
         path.resolve(rootDir, 'database/procedures.sql'),
         path.resolve(rootDir, 'database/migrations/001_phase2_payment_enhancements.sql'),
         path.resolve(rootDir, 'database/migrations/002_phase3_analytics_indexes.sql'),
+        path.resolve(rootDir, 'database/migrations/003_phase4_admin_enhancements.sql'),
       ];
 
       for (const file of initFiles) {
@@ -58,6 +59,7 @@ export async function setupTestDatabase() {
       const migrationFiles = [
         path.resolve(rootDir, 'database/migrations/001_phase2_payment_enhancements.sql'),
         path.resolve(rootDir, 'database/migrations/002_phase3_analytics_indexes.sql'),
+        path.resolve(rootDir, 'database/migrations/003_phase4_admin_enhancements.sql'),
       ];
       for (const file of migrationFiles) {
         if (fs.existsSync(file)) {

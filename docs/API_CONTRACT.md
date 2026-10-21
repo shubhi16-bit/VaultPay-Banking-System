@@ -970,10 +970,213 @@ if (result.success) {
 
 ---
 
-## 13. Upcoming Phase Endpoints (Phase 4 Preview)
-- `GET /api/admin/users` (Admin user management)
-- `PATCH /api/admin/accounts/:id/status` (Freeze/unfreeze accounts)
-- `GET /api/admin/audit-logs` (Administrative compliance & security audit logs)
-- `GET /api/admin/system/metrics` (System-wide financial ledger reconciliation)
+## 13. Admin Panel, Account Control & Compliance
+
+All endpoints in this section strictly require `Bearer <TOKEN>` authentication where the user record in MySQL possesses `role: 'admin'`. Non-admin requests receive `403 Forbidden`.
+
+### 13.1 List All Users & Account Summaries
+- **Method**: `GET`
+- **Endpoint**: `/api/admin/users`
+- **Auth**: `Bearer <ADMIN_TOKEN>`
+- **Query Parameters**:
+  - `page`: Page number (default: `1`)
+  - `limit`: Items per page (default: `10`, max: `100`)
+  - `search`: Search query matching full name, email, phone number, VaultPay ID, or account number
+  - `role`: `'all'` | `'customer'` | `'admin'` (default: `'all'`)
+  - `status`: `'all'` | `'active'` | `'frozen'` | `'closed'` (default: `'all'`)
+- **Privacy & Security**: Passwords, password hashes, and session tokens are strictly excluded from output.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Users retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 2,
+        "fullName": "Rahul Sharma",
+        "email": "rahul.sharma@example.com",
+        "phoneNumber": "+919876543210",
+        "role": "customer",
+        "isActive": true,
+        "createdAt": "2026-10-18T10:00:00.000Z",
+        "vaultpayId": "rahul@vaultpay",
+        "totalBalance": 25000.00,
+        "accounts": [
+          {
+            "id": 1,
+            "accountNumber": "100100234567",
+            "maskedAccountNumber": "••••4567",
+            "accountType": "savings",
+            "balance": 25000.00,
+            "currency": "INR",
+            "isPrimary": true,
+            "status": "active",
+            "bank": {
+              "id": 1,
+              "bankName": "Apex National Bank",
+              "bankCode": "APEX",
+              "logoUrl": "https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?w=128&q=80"
+            }
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "total": 5,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+### 13.2 Freeze or Unfreeze Bank Account
+- **Method**: `PATCH`
+- **Endpoint**: `/api/admin/accounts/:id/status`
+- **Auth**: `Bearer <ADMIN_TOKEN>`
+- **Request Body**:
+```json
+{
+  "status": "frozen",
+  "reason": "Suspicious high-velocity transaction alert raised by fraud monitor"
+}
+```
+- **Validation Rules**:
+  - `status`: Required, `'active'` or `'frozen'`.
+  - `reason`: Required string, 5–255 characters.
+- **Enforcement & Audit**:
+  - Automatically records the administrator ID, timestamp, and reason via the database trigger `trg_audit_account_status_change` in `audit_logs`.
+  - Frozen accounts are immediately barred from both sending and receiving money transfers and depositing funds.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Bank account successfully marked as frozen",
+  "data": {
+    "accountId": 2,
+    "userId": 3,
+    "accountNumber": "200200876543",
+    "ownerName": "Priya Verma",
+    "ownerEmail": "priya.verma@example.com",
+    "previousStatus": "active",
+    "status": "frozen",
+    "reason": "Suspicious high-velocity transaction alert raised by fraud monitor",
+    "updatedBy": {
+      "adminId": 1,
+      "adminEmail": "admin@vaultpay.com"
+    },
+    "updatedAt": "2026-10-21T05:45:00.000Z"
+  }
+}
+```
+
+### 13.3 Retrieve Compliance Audit Logs
+- **Method**: `GET`
+- **Endpoint**: `/api/admin/audit-logs`
+- **Auth**: `Bearer <ADMIN_TOKEN>`
+- **Query Parameters**:
+  - `page`: Page number (default: `1`)
+  - `limit`: Items per page (default: `20`, max: `100`)
+  - `action`: Filter by action string (e.g. `ACCOUNT_STATUS`, `TRANSFER_COMPLETED`)
+  - `entityType`: Filter by entity (e.g. `bank_accounts`, `transactions`, `users`)
+  - `userId`: Filter by actor user ID
+  - `startDate`: `YYYY-MM-DD`
+  - `endDate`: `YYYY-MM-DD`
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Audit logs retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 14,
+        "action": "ACCOUNT_STATUS_FROZEN",
+        "entityType": "bank_accounts",
+        "entityId": "2",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "PostmanRuntime/7.39.0",
+        "metadata": {
+          "account_number": "200200876543",
+          "old_status": "active",
+          "new_status": "frozen",
+          "reason": "Suspicious high-velocity transaction alert raised by fraud monitor",
+          "admin_id": 1
+        },
+        "createdAt": "2026-10-21T05:45:00.000Z",
+        "actor": {
+          "id": 1,
+          "fullName": "System Administrator",
+          "email": "admin@vaultpay.com",
+          "role": "admin"
+        }
+      }
+    ],
+    "pagination": {
+      "total": 14,
+      "page": 1,
+      "limit": 20,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+### 13.4 System Financial Metrics & General Ledger Reconciliation
+- **Method**: `GET`
+- **Endpoint**: `/api/admin/system/metrics`
+- **Auth**: `Bearer <ADMIN_TOKEN>`
+- **Description**: Computes system-wide user counts, account balances, transaction volumes, and conducts mathematical double-entry reconciliation across all ledger entries and account balances using the SQL view `vw_ledger_audit`.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "System metrics and ledger reconciliation retrieved successfully",
+  "data": {
+    "timestamp": "2026-10-21T05:48:00.000Z",
+    "users": {
+      "total": 5,
+      "customers": 4,
+      "admins": 1,
+      "active": 5
+    },
+    "accounts": {
+      "total": 4,
+      "active": 4,
+      "frozen": 0,
+      "closed": 0,
+      "totalCirculatingBalance": 98500.00,
+      "currency": "INR"
+    },
+    "transactions": {
+      "total": 3,
+      "completed": 3,
+      "failed": 0,
+      "pending": 0,
+      "totalTransferVolume": 2000.00,
+      "totalDepositVolume": 42000.00,
+      "totalWithdrawalVolume": 0.00,
+      "currency": "INR"
+    },
+    "ledgerReconciliation": {
+      "isLedgerBalanced": true,
+      "isDoubleEntryBalanced": true,
+      "isSystemFullyReconciled": false,
+      "auditedTransactionsCount": 3,
+      "discrepancyCount": 0,
+      "totalDiscrepancyAmount": 0.00,
+      "cumulativeCredits": 46000.00,
+      "cumulativeDebits": 2000.00,
+      "totalCirculatingBalance": 98500.00,
+      "netDepositInflow": 42000.00,
+      "unbackedOpeningBalances": 56500.00,
+      "calculationBasis": "Verified via MySQL vw_ledger_audit: zero-sum parity on transfers and balanced credit liability on deposits"
+    }
+  }
+}
+```
+
 
 

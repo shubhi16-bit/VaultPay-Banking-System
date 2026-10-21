@@ -69,3 +69,33 @@ export function requireRole(...roles) {
     next();
   };
 }
+
+/**
+ * Strict Admin-Only Authorization Middleware
+ * Verifies role directly from trusted database record; never trusts client-supplied claims
+ */
+export async function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.id) {
+    return ApiResponse.error(res, 'Authentication required.', 401);
+  }
+
+  try {
+    const [rows] = await query(
+      'SELECT id, role, is_active FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (rows.length === 0 || !rows[0].is_active) {
+      return ApiResponse.error(res, 'User account not found or deactivated.', 401);
+    }
+
+    if (rows[0].role !== 'admin') {
+      return ApiResponse.error(res, 'Access denied. Administrator privileges required.', 403);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+

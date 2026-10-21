@@ -9,6 +9,7 @@ import meRoutes from './me.routes.js';
 import payeeRoutes from './payee.routes.js';
 import qrRoutes from './qr.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
+import adminRoutes from './admin.routes.js';
 import { testDbConnection } from '../config/db.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -51,5 +52,6 @@ router.use('/me', meRoutes);
 router.use('/payees', payeeRoutes);
 router.use('/qr', qrRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;
