@@ -5,6 +5,10 @@ import accountRoutes from './account.routes.js';
 import transferRoutes from './transfer.routes.js';
 import userRoutes from './user.routes.js';
 import transactionRoutes from './transaction.routes.js';
+import meRoutes from './me.routes.js';
+import payeeRoutes from './payee.routes.js';
+import qrRoutes from './qr.routes.js';
+import dashboardRoutes from './dashboard.routes.js';
 import { testDbConnection } from '../config/db.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -43,5 +47,9 @@ router.use('/accounts', accountRoutes);
 router.use('/transfers', transferRoutes);
 router.use('/users', userRoutes);
 router.use('/transactions', transactionRoutes);
+router.use('/me', meRoutes);
+router.use('/payees', payeeRoutes);
+router.use('/qr', qrRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;

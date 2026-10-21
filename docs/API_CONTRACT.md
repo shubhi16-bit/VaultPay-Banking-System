@@ -689,12 +689,291 @@ if (result.success) {
 
 ---
 
-## 10. Upcoming Phase Endpoints (Preview)
-- `GET /api/qr/my-code` (Phase 3)
-- `POST /api/qr/resolve` (Phase 3)
-- `GET /api/dashboard/summary` (Phase 3)
-- `GET /api/dashboard/analytics` (Phase 3)
-- `GET /api/admin/users` (Phase 4)
-- `PATCH /api/admin/accounts/:id/status` (Phase 4)
-- `GET /api/admin/audit-logs` (Phase 4)
+---
+
+## 10. QR Code Payments & Payee Resolution
+
+### 10.1 Get Authenticated User QR Code
+- **Method**: `GET`
+- **Endpoint**: `/api/me/qr` *(Alias: `/api/qr/my-code`)*
+- **Auth**: `Bearer <TOKEN>`
+- **Prerequisite**: User must have completed bank account linking during onboarding. Returns `400 Bad Request` if no bank account is linked.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "QR code retrieved successfully",
+  "data": {
+    "userId": 2,
+    "fullName": "Rahul Sharma",
+    "vaultpayId": "rahul@vaultpay",
+    "accountNumber": "••••4567",
+    "bankName": "Apex National Bank",
+    "bankCode": "APEX",
+    "bankLogo": "https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?w=128&q=80",
+    "qrPayload": "vaultpay://pay?pa=rahul@vaultpay&pn=Rahul%20Sharma&cu=INR",
+    "qrDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADIEAYAAAD97246...",
+    "qrSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 29 29\" shape-rendering=\"crispEdges\">...</svg>"
+  }
+}
+```
+
+### 10.2 Resolve QR Recipient / Payee Details
+- **Method**: `GET`
+- **Endpoint**: `/api/payees/:vaultpayId`
+- **Auth**: `Bearer <TOKEN>`
+- **Description**: Verifies that the recipient exists, validates account status (active vs frozen), checks self-payment restriction, and returns safe public payment details for the frontend transfer confirmation sheet.
+- **Sample Success Response (200 OK — Active Eligible Recipient)**:
+```json
+{
+  "success": true,
+  "message": "Payee resolved successfully",
+  "data": {
+    "vaultpayId": "priya@vaultpay",
+    "fullName": "Priya Verma",
+    "bankName": "Zenith Commerce Bank",
+    "bankCode": "ZENITH",
+    "bankLogo": "https://images.unsplash.com/photo-1501167786227-4cba60f6d58f?w=128&q=80",
+    "maskedAccountNumber": "••••6543",
+    "isEligible": true,
+    "isSelf": false,
+    "reason": null
+  }
+}
+```
+- **Sample Success Response (200 OK — Self-Lookup Restriction)**:
+```json
+{
+  "success": true,
+  "message": "Payee resolved successfully",
+  "data": {
+    "vaultpayId": "rahul@vaultpay",
+    "fullName": "Rahul Sharma",
+    "bankName": "Apex National Bank",
+    "bankCode": "APEX",
+    "bankLogo": "https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?w=128&q=80",
+    "maskedAccountNumber": "••••4567",
+    "isEligible": false,
+    "isSelf": true,
+    "reason": "Self-transfers to your own account are not permitted."
+  }
+}
+```
+- **Sample Success Response (200 OK — Frozen Account Restriction)**:
+```json
+{
+  "success": true,
+  "message": "Payee resolved successfully",
+  "data": {
+    "vaultpayId": "amit@vaultpay",
+    "fullName": "Amit Patel",
+    "bankName": "Horizon Federal Bank",
+    "bankCode": "HORIZON",
+    "bankLogo": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=128&q=80",
+    "maskedAccountNumber": "••••6123",
+    "isEligible": false,
+    "isSelf": false,
+    "reason": "Recipient account is frozen or inactive."
+  }
+}
+```
+- **Sample Error Response (404 Not Found)**:
+```json
+{
+  "success": false,
+  "message": "Recipient VaultPay ID not found or account is inactive."
+}
+```
+
+### 10.3 Resolve Payee via Raw QR URI / Payload
+- **Method**: `POST`
+- **Endpoint**: `/api/qr/resolve`
+- **Auth**: `Bearer <TOKEN>`
+- **Request Body**:
+```json
+{
+  "qrPayload": "vaultpay://pay?pa=priya@vaultpay&pn=Priya%20Verma&cu=INR"
+}
+```
+- **Response**: Same envelope and validation guarantees as `GET /api/payees/:vaultpayId`.
+
+---
+
+## 11. Dashboard Analytics & Summary
+
+### 11.1 Get Dashboard Summary
+- **Method**: `GET`
+- **Endpoint**: `/api/dashboard/summary`
+- **Auth**: `Bearer <TOKEN>`
+- **Description**: Returns authoritative balance of primary account, cumulative sent/received/deposit totals, net cash flow, transaction counts, and 5 most recent transactions.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Dashboard summary retrieved successfully",
+  "data": {
+    "balance": 25000.00,
+    "currency": "INR",
+    "totalSent": 0.00,
+    "totalReceived": 2000.00,
+    "totalDeposited": 25000.00,
+    "netCashFlow": 27000.00,
+    "transactionCount": 2,
+    "primaryAccount": {
+      "accountId": 1,
+      "accountNumber": "••••4567",
+      "bankName": "Apex National Bank",
+      "bankCode": "APEX",
+      "bankLogo": "https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?w=128&q=80",
+      "vaultpayId": "rahul@vaultpay",
+      "status": "active"
+    },
+    "recentTransactions": [
+      {
+        "transactionId": 3,
+        "referenceId": "TXN_TRF_20261005_001",
+        "type": "transfer",
+        "flow": "credit",
+        "amount": 2000.00,
+        "fee": 0.00,
+        "currency": "INR",
+        "status": "completed",
+        "note": "Dinner bill split",
+        "counterparty": {
+          "fullName": "Priya Verma",
+          "vaultpayId": "priya@vaultpay",
+          "bankName": "Zenith Commerce Bank"
+        },
+        "createdAt": "2026-10-18T10:00:00.000Z",
+        "completedAt": "2026-10-18T10:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+### 11.2 Get Time-Series Cash Flow Trends & Spending Breakdown
+- **Method**: `GET`
+- **Endpoint**: `/api/dashboard/analytics?period=6m&days=30`
+- **Auth**: `Bearer <TOKEN>`
+- **Query Parameters**:
+  - `period`: Optional `'1m'` | `'3m'` | `'6m'` | `'1y'` (default: `'6m'`).
+  - `days`: Optional integer `1–90` for daily granularity (default: `30`).
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Dashboard analytics retrieved successfully",
+  "data": {
+    "period": "6m",
+    "periodDays": 180,
+    "dailyDays": 30,
+    "summary": {
+      "totalInflow": 27000.00,
+      "totalOutflow": 0.00,
+      "netCashFlow": 27000.00
+    },
+    "monthlyTrends": [
+      {
+        "month": "2026-10",
+        "inflow": 27000.00,
+        "outflow": 0.00,
+        "net": 27000.00,
+        "transactionCount": 2
+      }
+    ],
+    "dailyTrends": [
+      {
+        "date": "2026-10-18",
+        "inflow": 2000.00,
+        "outflow": 0.00,
+        "net": 2000.00,
+        "transactionCount": 1
+      }
+    ],
+    "spendingCategories": [
+      {
+        "category": "Food & Dining",
+        "amount": 2000.00,
+        "count": 1,
+        "percentage": 100.0
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 12. Payment Receipts & PDF Downloads
+
+### 12.1 Get Full Payment Receipt (JSON Format)
+- **Method**: `GET`
+- **Endpoint**: `/api/transactions/:id/receipt`
+- **Auth**: `Bearer <TOKEN>`
+- **Access Control**: Returns `403 Forbidden` if authenticated user is neither the sender nor recipient.
+- **Sample Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Transaction receipt retrieved successfully",
+  "data": {
+    "transactionId": 3,
+    "referenceId": "TXN_TRF_20261005_001",
+    "receiptNumber": "REC-TXN_TRF_20261005_001",
+    "verificationHash": "A8F14E36B920042D3C0123456789ABCD",
+    "issuedAt": "2026-10-21T05:20:00.000Z",
+    "type": "transfer",
+    "flow": "debit",
+    "amount": 2000.00,
+    "fee": 0.00,
+    "currency": "INR",
+    "status": "completed",
+    "note": "Dinner bill split",
+    "failureReason": null,
+    "createdAt": "2026-10-18T10:00:00.000Z",
+    "completedAt": "2026-10-18T10:00:00.000Z",
+    "sender": {
+      "fullName": "Priya Verma",
+      "vaultpayId": "priya@vaultpay",
+      "bankName": "Zenith Commerce Bank",
+      "maskedAccountNumber": "••••6543"
+    },
+    "recipient": {
+      "fullName": "Rahul Sharma",
+      "vaultpayId": "rahul@vaultpay",
+      "bankName": "Apex National Bank",
+      "maskedAccountNumber": "••••4567"
+    },
+    "ledgerEntries": [
+      {
+        "entryId": 3,
+        "entryType": "debit",
+        "amount": 2000.00,
+        "balanceAfter": 15000.00,
+        "description": "Transfer debit to priya@vaultpay (ref: TXN_TRF_20261005_001)",
+        "timestamp": "2026-10-18T10:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+### 12.2 Download Official PDF Receipt
+- **Method**: `GET`
+- **Endpoint**: `/api/transactions/:id/receipt?format=pdf` *(Or send header `Accept: application/pdf`)*
+- **Auth**: `Bearer <TOKEN>`
+- **Response Headers**:
+  - `Content-Type`: `application/pdf`
+  - `Content-Disposition`: `attachment; filename="vaultpay-receipt-{referenceId}.pdf"`
+- **Response Body**: Binary PDF stream rendered with VaultPay brand colors, status badge, transaction and party information, balanced ledger audit reference, and simulation disclaimer.
+
+---
+
+## 13. Upcoming Phase Endpoints (Phase 4 Preview)
+- `GET /api/admin/users` (Admin user management)
+- `PATCH /api/admin/accounts/:id/status` (Freeze/unfreeze accounts)
+- `GET /api/admin/audit-logs` (Administrative compliance & security audit logs)
+- `GET /api/admin/system/metrics` (System-wide financial ledger reconciliation)
+
 

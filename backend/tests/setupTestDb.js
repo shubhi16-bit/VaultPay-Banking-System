@@ -39,6 +39,7 @@ export async function setupTestDatabase() {
         path.resolve(rootDir, 'database/triggers.sql'),
         path.resolve(rootDir, 'database/procedures.sql'),
         path.resolve(rootDir, 'database/migrations/001_phase2_payment_enhancements.sql'),
+        path.resolve(rootDir, 'database/migrations/002_phase3_analytics_indexes.sql'),
       ];
 
       for (const file of initFiles) {
@@ -52,9 +53,36 @@ export async function setupTestDatabase() {
           await adminConn.query(cleanedSql);
         }
       }
+    } else {
+      // Run migrations in case new migrations were added
+      const migrationFiles = [
+        path.resolve(rootDir, 'database/migrations/001_phase2_payment_enhancements.sql'),
+        path.resolve(rootDir, 'database/migrations/002_phase3_analytics_indexes.sql'),
+      ];
+      for (const file of migrationFiles) {
+        if (fs.existsSync(file)) {
+          let sql = fs.readFileSync(file, 'utf8');
+          sql = sql.replace(/USE\s+vaultpay_db;/gi, `USE ${TEST_DB_NAME};`);
+          const cleanedSql = sql
+            .replace(/DELIMITER\s+\$\$/gi, '')
+            .replace(/DELIMITER\s+;/gi, '')
+            .replace(/\$\$/g, ';');
+          await adminConn.query(cleanedSql);
+        }
+      }
     }
 
     // 2. Re-seed test database with clean starting state
+    await adminConn.query(`
+      SET FOREIGN_KEY_CHECKS = 0;
+      DELETE FROM ledger_entries;
+      DELETE FROM transactions;
+      DELETE FROM beneficiaries;
+      DELETE FROM idempotency_records;
+      DELETE FROM audit_logs;
+      SET FOREIGN_KEY_CHECKS = 1;
+    `);
+
     const cleanFiles = [
       path.resolve(rootDir, 'database/seed.sql'),
       path.resolve(rootDir, 'database/views.sql'),
