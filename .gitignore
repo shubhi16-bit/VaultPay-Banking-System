@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+
+# Production build artifacts
+frontend/dist/
+dist/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.local
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
