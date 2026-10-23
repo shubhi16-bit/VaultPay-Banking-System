@@ -12,9 +12,11 @@ import { PayPage } from '../pages/PayPage';
 import { QrPage } from '../pages/QrPage';
 import { AddMoneyPage } from '../pages/AddMoneyPage';
 import { TransactionsPage } from '../pages/TransactionsPage';
+import { TransactionDetailPage } from '../pages/TransactionDetailPage';
 import { BankAccountsPage } from '../pages/BankAccountsPage';
 import { InsightsPage } from '../pages/InsightsPage';
 import { ProfilePage } from '../pages/ProfilePage';
+import { SettingsPage } from '../pages/SettingsPage';
 import { AdminPage } from '../pages/AdminPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
@@ -88,9 +90,11 @@ export const AppRoutes: React.FC = () => {
         <Route path="/qr" element={<QrPage />} />
         <Route path="/add-money" element={<AddMoneyPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/transactions/:id" element={<TransactionDetailPage />} />
         <Route path="/accounts" element={<BankAccountsPage />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
 
         {/* Admin Dashboard */}
         <Route

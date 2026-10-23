@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useBank } from '../../context/BankContext';
 import { Logo } from '../common/Logo';
 import { formatCurrency, getInitials } from '../../utils/formatters';
-import { LogOut, User as UserIcon, ShieldAlert, CreditCard, ChevronDown } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldAlert, CreditCard, ChevronDown, Settings } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -92,7 +92,16 @@ export const Navbar: React.FC = () => {
                         className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600"
                       >
                         <UserIcon size={15} />
-                        <span>Profile & Settings</span>
+                        <span>My Profile</span>
+                      </Link>
+
+                      <Link
+                        to="/settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600"
+                      >
+                        <Settings size={15} />
+                        <span>Settings</span>
                       </Link>
 
                       {isAdmin && (

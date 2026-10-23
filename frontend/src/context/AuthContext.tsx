@@ -1,11 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../types';
 import { INITIAL_MOCK_USER, UNLINKED_MOCK_USER, INITIAL_MOCK_ADMIN } from '../services/mockData';
+import { apiClient } from '../services/apiClient';
 
 interface AuthResult {
   success: boolean;
   error?: string;
   redirectTo?: string;
+}
+
+interface ProfileUpdateResult {
+  success: boolean;
+  error?: string;
+  isBackendConfirmed?: boolean;
 }
 
 interface AuthContextType {
@@ -19,6 +26,8 @@ interface AuthContextType {
   logout: () => void;
   markBankAsLinked: () => void;
   switchToDemoUser: (type: 'linked' | 'unlinked' | 'admin') => void;
+  updateProfile: (data: { name: string; phone?: string }) => Promise<ProfileUpdateResult>;
+  updateLocalDemoProfile: (data: { name: string; phone?: string }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -154,6 +163,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('vaultpay_token', token);
   };
 
+  const updateProfile = async (data: {
+    name: string;
+    phone?: string;
+  }): Promise<ProfileUpdateResult> => {
+    try {
+      const response = await apiClient.put('/users/profile', data, { timeout: 4000 });
+      if (response.status === 200 || response.status === 201) {
+        if (user) {
+          const updatedUser: User = {
+            ...user,
+            name: data.name.trim(),
+            phone: data.phone?.trim() || user.phone,
+          };
+          setUser(updatedUser);
+          localStorage.setItem('vaultpay_user', JSON.stringify(updatedUser));
+        }
+        return { success: true, isBackendConfirmed: true };
+      }
+      return { success: false, error: response.data?.message || 'Profile update rejected by backend.' };
+    } catch {
+      return {
+        success: false,
+        isBackendConfirmed: false,
+        error: 'Backend offline: Live server at http://localhost:5000 is unreachable. Endpoint PUT /api/users/profile is required to save changes permanently.',
+      };
+    }
+  };
+
+  const updateLocalDemoProfile = (data: { name: string; phone?: string }) => {
+    if (user) {
+      const updatedUser: User = {
+        ...user,
+        name: data.name.trim(),
+        phone: data.phone?.trim() || user.phone,
+      };
+      setUser(updatedUser);
+      localStorage.setItem('vaultpay_user', JSON.stringify(updatedUser));
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -167,6 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         markBankAsLinked,
         switchToDemoUser,
+        updateProfile,
+        updateLocalDemoProfile,
       }}
     >
       {children}

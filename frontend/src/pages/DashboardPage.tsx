@@ -8,6 +8,7 @@ import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { Input } from '../components/common/Input';
 import { Alert } from '../components/common/Alert';
+import { PendingIntegrationModal } from '../components/common/PendingIntegrationModal';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import type { Transaction, FrequentContact } from '../types';
 import {
@@ -37,6 +38,7 @@ export const DashboardPage: React.FC = () => {
     contacts,
     bankAccounts,
     sendPayment,
+    simulateOfflineSandboxPayment,
   } = useBank();
 
   const [copied, setCopied] = useState(false);
@@ -51,6 +53,14 @@ export const DashboardPage: React.FC = () => {
   const [quickPayError, setQuickPayError] = useState<string | null>(null);
   const [isProcessingQuickPay, setIsProcessingQuickPay] = useState(false);
   const [quickPayReceipt, setQuickPayReceipt] = useState<Transaction | null>(null);
+  const [pendingModalData, setPendingModalData] = useState<{
+    isOpen: boolean;
+    payload?: any;
+    endpoint: string;
+  }>({
+    isOpen: false,
+    endpoint: '/api/payments',
+  });
 
   // Filter for recent transactions
   const [txFilter, setTxFilter] = useState<'ALL' | 'SEND' | 'RECEIVE' | 'ADD_MONEY'>('ALL');
@@ -112,6 +122,19 @@ export const DashboardPage: React.FC = () => {
         setQuickPayContact(null);
         setQuickPayAmount('');
         setQuickPayNote('');
+      } else if (res.isPendingIntegration) {
+        setQuickPayContact(null);
+        setPendingModalData({
+          isOpen: true,
+          endpoint: '/api/payments',
+          payload: {
+            recipientVaultPayId: quickPayContact.vaultPayId,
+            amount: amt,
+            note: quickPayNote,
+            sourceBankAccountId: primaryAccount.id,
+            pin: '••••',
+          },
+        });
       } else {
         setQuickPayError(res.error || 'Payment failed.');
       }
@@ -691,6 +714,31 @@ export const DashboardPage: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Honest Backend Integration Pending Modal */}
+      <PendingIntegrationModal
+        isOpen={pendingModalData.isOpen}
+        onClose={() => setPendingModalData({ ...pendingModalData, isOpen: false })}
+        operationName="Quick Transfer"
+        endpoint={pendingModalData.endpoint}
+        payload={pendingModalData.payload}
+        onRetry={(e?: unknown) => handleExecuteQuickPay(e as unknown as React.FormEvent)}
+        onSimulateSandbox={() => {
+          if (!pendingModalData.payload) return;
+          const res = simulateOfflineSandboxPayment({
+            recipientVaultPayId: pendingModalData.payload.recipientVaultPayId,
+            amount: pendingModalData.payload.amount,
+            note: pendingModalData.payload.note,
+            sourceBankAccountId: pendingModalData.payload.sourceBankAccountId,
+            pin: '1234',
+          });
+          setPendingModalData({ ...pendingModalData, isOpen: false });
+          if (res.success && res.transaction) {
+            setQuickPayReceipt(res.transaction);
+          }
+        }}
+        isRetrying={isProcessingQuickPay}
+      />
     </div>
   );
 };

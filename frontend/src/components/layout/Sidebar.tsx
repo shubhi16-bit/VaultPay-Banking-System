@@ -10,6 +10,7 @@ import {
   Landmark,
   PieChart,
   User,
+  Settings,
   ShieldAlert,
 } from 'lucide-react';
 
@@ -24,7 +25,8 @@ export const Sidebar: React.FC = () => {
     { label: 'Transactions', path: '/transactions', icon: History },
     { label: 'Bank Accounts', path: '/accounts', icon: Landmark },
     { label: 'Spending Insights', path: '/insights', icon: PieChart },
-    { label: 'Profile & Settings', path: '/profile', icon: User },
+    { label: 'My Profile', path: '/profile', icon: User },
+    { label: 'Settings', path: '/settings', icon: Settings },
   ];
 
   return (
